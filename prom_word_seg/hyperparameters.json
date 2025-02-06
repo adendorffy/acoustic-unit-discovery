@@ -1,0 +1,25 @@
+{   "hubert_base": {
+    "6": {
+        "distance": "euclidean", 
+        "window_size": 6, 
+        "prominence": 0.4
+    },
+    "10": {
+        "distance": "euclidean", 
+        "window_size": 6, 
+        "prominence": 0.4
+    }
+},
+"hubert_large": {
+    "6": {
+        "distance": "euclidean", 
+        "window_size": 6, 
+        "prominence": 0.4
+    },
+    "10": {
+        "distance": "euclidean", 
+        "window_size": 6, 
+        "prominence": 0.4
+    }
+}
+}
