@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse
 
 def convert_audio(input_dir, output_dir, convert_from, convert_to):
-    files = list(input_dir.rglob(f"*.{convert_from}"))
+    files = list(input_dir.rglob(f"*/**/*.{convert_from}"))
 
     if len(files) == 0:
         return "No files in input directory."

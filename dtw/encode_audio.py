@@ -56,13 +56,9 @@ def encode_audio(input_dir, output_dir, model_name="hubert_base", layer_num=6, a
 
             with open(list_filename, 'w') as f: 
                 for timestamp in speech_timestamps:
-                    start_frame = get_frame_num(timestamp['start'], 20)
-                    end_frame = get_frame_num(timestamp['end'], 20)
-            
-                    frame_list = [start_frame, end_frame]
-                 
-                    f.write(f"{frame_list[0]}\n")  
-                    f.write(f"{frame_list[1]}\n")  
+                  
+                    f.write(f"{timestamp['start']}\n")  
+                    f.write(f"{timestamp['end']}\n")  
 
     if use_vad:
         print(f"Stored alignments in {str(alignments_dir)}")
