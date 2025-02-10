@@ -7,6 +7,7 @@ import torch
 from sklearn.preprocessing import StandardScaler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 
 def dp(dist_mat):
 
@@ -87,7 +88,7 @@ def dtw(input_dir, output_dir, vad_dir, model_name="hubert_base", layer_num=6):
     associated_filenames = []
     # for file in tqdm(files, desc="Loading Features"):
     for i, file in enumerate(files):
-        if i > 10: 
+        if i > 10:
             break
 
         alignment_files = [a for a in list(vad_dir.rglob("*.list")) if a.stem == file.stem]
@@ -115,7 +116,7 @@ def dtw(input_dir, output_dir, vad_dir, model_name="hubert_base", layer_num=6):
     normalized_features = []
 
     for feature in tqdm(features, desc="Normalising Features"):
-        norm_feature = torch.from_numpy(scaler.transform(feature.cpu().numpy()))
+        norm_feature = torch.from_numpy(scaler.transform(feature.cpu().numpy())).to(device)
         normalized_features.append(norm_feature) 
     
     num_features = len(normalized_features)
