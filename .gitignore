@@ -4,3 +4,4 @@ __pycache__
 output/
 dynamic_time_warping/data
 dynamic_time_warping/.venv
+dynamic_time_warping/encodings
