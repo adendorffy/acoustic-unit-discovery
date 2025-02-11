@@ -2,6 +2,31 @@
 import argparse
 from pathlib import Path
 
+class Cluster:
+    def __init__(self,id, word_dict=None, true_words=None):
+        self.id = id
+        self.word_dict = word_dict if word_dict is not None else []
+        self.true_word_dict = true_words if true_words is not None else []
+    
+    def add_word_unit(self, id, index, file):
+        word_unit = WordUnit(file, index, id)
+        self.word_dict.append(word_unit)
+
+    def add_true_word(self, word):
+        self.true_word_dict.append(word)
+
+    @classmethod
+    def print_cluster(self, cluster):
+        print(f"Cluster {cluster.id}")
+        for word in cluster.word_dict:
+            print(f"Word {word.id}: Index {word.index} in File {word.file}")
+
+class WordUnit:
+    def __init__(self, file, index, id):
+        self.index = int(index)
+        self.file = file
+        self.id = int(id)
+
 def parse_text_to_dict(file):
     with open(file, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -37,6 +62,24 @@ def parse_text_to_dict(file):
         
     return data_dict
 
+def cluster_purity(clusters):
+    total_length = 0
+    total_purity = 0
+
+    for cluster in clusters: 
+        length = len(cluster.true_word_dict)
+        word_counts = {}
+        for word in cluster.true_word_dict:
+            word_counts[word] = word_counts.get(word, 0) + 1
+
+        max_count = max(word_counts.values()) if word_counts else 0
+        cluster_purity = max_count / length if length > 0 else 0
+
+        total_purity += cluster_purity * length
+        total_length += length
+        
+    return total_purity / total_length if total_length > 0 else 0
+
 
 def parse_cluster_file(filename):
     with open(filename, "r", encoding="utf-8") as file:
@@ -71,26 +114,8 @@ def parse_cluster_file(filename):
 
     return clusters
 
-class Cluster:
-    def __init__(self,id, word_dict=None):
-        self.id = id
-        self.word_dict = word_dict if word_dict is not None else []
-    
-    def add_word_unit(self, id, index, file):
-        word_unit = WordUnit(file, index, id)
-        self.word_dict.append(word_unit)
 
-    @classmethod
-    def print_cluster(self, cluster):
-        print(f"Cluster {cluster.id}")
-        for word in cluster.word_dict:
-            print(f"Word {word.id}: Index {word.index} in File {word.file}")
 
-class WordUnit:
-    def __init__(self, file, index, id):
-        self.index = int(index)
-        self.file = file
-        self.id = int(id)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Apply DTW to HuBERT features to get a distance matrix.")
@@ -137,12 +162,13 @@ if __name__ == "__main__":
         clusters = parse_cluster_file(cluster_file)
 
         for clust in clusters:
-            words = []
             if len(clust.word_dict) > 0:
                 print(f"cluster {clust.id}")
                 for word_unit in clust.word_dict:
                     word = indices_dict[word_unit.file][word_unit.index]
-                    words.append(word)
-                print(words)
+                    clust.add_true_word(word)
+                print(clust.true_word_dict)
+
+        print(cluster_purity(clusters))
 
 # python eval.py data/librispeech_subset_alignments/words_and_indices.txt output/dtw/clusters wavlm_base 8
