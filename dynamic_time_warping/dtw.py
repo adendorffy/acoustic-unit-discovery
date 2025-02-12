@@ -64,14 +64,15 @@ def dp(dist_mat):
     return cost_mat
 
 
-def dtw(encoding_dir:Path, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int)->None:
+def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int)->None:
     """
     Use Dynmic Time Warping to calculate the distances between different words.
     """
     file_dir = encoding_dir / model_name / str(layer_num)
     files = list(file_dir.rglob("*.npy"))
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     features = []
     filenames = {}

@@ -30,8 +30,10 @@ def encode(input_dir:Path, output_dir:Path, model_name:str, layer_num:int, audio
     model = bundle.get_model().to(device)
     model.eval()
 
-    output_dir = Path(output_dir) / model_name / str(layer_num)
+    if output_dir:
+        output_dir = Path(output_dir) / model_name / str(layer_num)
 
+    encodings = {}
     for audio in tqdm(audios, desc="Encoding Audio Features"):
         waveform, sample_rate = torchaudio.load(str(audio))
         waveform = waveform.to(device)
@@ -43,12 +45,20 @@ def encode(input_dir:Path, output_dir:Path, model_name:str, layer_num:int, audio
             features, _ = model.extract_features(waveform, num_layers=layer_num)
 
         encoding = features[layer_num-1].squeeze(0).cpu().numpy()
+        
+        if output_dir:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = Path(output_dir) / f"{audio.stem}.npy"
+            np.save(output_path, encoding)
+            
+        else:
+            encodings[audio.stem] = encoding
 
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = Path(output_dir) / f"{audio.stem}.npy"
-        np.save(output_path, encoding)
+    if output_dir:
+        return f"Stored encodings in {output_dir}."
     
-    print(f"Stored encodings in {output_dir}.")
+    return encodings
+    
 
 
 if __name__ == "__main__":

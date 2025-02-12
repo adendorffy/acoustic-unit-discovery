@@ -6,22 +6,25 @@ from pathlib import Path
 
 
 def cluster(input_dir, cluster_dir, model_name, layer_num, distance_threshold=0.7):
-    input_dir = Path(input_dir / model_name / str(layer_num))
-    files = list(input_dir.rglob("*"))
+    if isinstance(input_dir, Path):
+        input_dir = Path(input_dir / model_name / str(layer_num))
+        files = list(input_dir.rglob("*"))
 
-    filenames = {}
-    for file in files:
-      
-        if "norm" in file.stem:
-            norm_dist_mat = np.load(file)
+        filenames = {}
+        for file in files:
         
-        elif "filenames" in file.stem:
-            with open(file, "r", encoding="utf-8") as f:
-                filenames = json.load(f)
+            if "norm" in file.stem:
+                norm_dist_mat = np.load(file)
+            
+            elif "filenames" in file.stem:
+                with open(file, "r", encoding="utf-8") as f:
+                    filenames = json.load(f)
 
-        elif "distance" in file.stem:
-            dist_mat = np.load(file)
-                
+            elif "distance" in file.stem:
+                dist_mat = np.load(file)
+    else:
+        norm_dist_mat = input_dir
+        filenames = cluster_dir
 
     norm_dist_mat += norm_dist_mat.T
 
@@ -59,15 +62,19 @@ def cluster(input_dir, cluster_dir, model_name, layer_num, distance_threshold=0.
             new_cluster = bfs(node)
             clusters.append(new_cluster)
 
-    output_file = cluster_dir / f"{model_name}_{layer_num}_d{distance_threshold}.txt"
-    cluster_dir.mkdir(parents=True, exist_ok=True)
+    if isinstance(cluster_dir,Path):
+        output_file = cluster_dir / f"{model_name}_{layer_num}_d{distance_threshold}.txt"
+        cluster_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        for i, cluster in enumerate(clusters):
-            f.write(f"\nCluster {i}:\n")  
-            for j in range(len(cluster)):
-                f.write(f"{cluster[j]} = {filenames[str(cluster[j])]}\n")
-    print(f"Cluster info written in {output_file}")
+        with open(output_file, "w", encoding="utf-8") as f:
+            for i, cluster in enumerate(clusters):
+                f.write(f"\nCluster {i}:\n")  
+                for j in range(len(cluster)):
+                    f.write(f"{cluster[j]} = {filenames[str(cluster[j])]}\n")
+        return f"Cluster info written in {output_file}"
+    else:
+        return clusters
+
     
 
 if __name__ == "__main__":
@@ -106,6 +113,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    cluster(args.input_dir, args.cluster_dir, args.model_name, args.layer_num, args.dist)
+    message = cluster(args.input_dir, args.cluster_dir, args.model_name, args.layer_num, args.dist)
 
+    print(message)
     # python cluster.py output/dtw/ output/dtw/clusters/ hubert_base 8 0.5
