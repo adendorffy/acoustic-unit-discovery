@@ -130,13 +130,12 @@ if __name__ == "__main__":
                 word = indices_dict[word_unit.file][word_unit.index]
                 clust.add_true_word(word)
 
-            if len(clust.word_dict) > 0:
+            if len(clust.word_dict) > 1:
                 clusters_array.append(clust.true_word_dict)
                 clust.cluster_purity()
 
-                if clust.purity < 1.0:
-                    print(f"cluster {clust.id} has purity : {clust.purity*100}%")
-                    print(clust.true_word_dict)
+                print(f"cluster {clust.id} has purity : {clust.purity*100}%")
+                print(clust.true_word_dict)
 
                 total_length += clust.length
                 total_purity += clust.purity * clust.length
@@ -156,6 +155,5 @@ if __name__ == "__main__":
 
     print("Number of duplicate clusters:", Cluster.duplicate_clusters(condensed_clusters))  
         
-
 
 # python eval.py data/librispeech_subset_alignments/words_and_indices.txt output/dtw/clusters wavlm_base 8 0.55
