@@ -62,8 +62,8 @@ if __name__ == "__main__":
 
         model_name = parts[0] + "_" + parts[1]
         layer_num = int(parts[2])
-        distance = float(f"0.{parts[3].split(".")[1]}")
-        print(f"{model_name}, {layer_num}, {distance}")
+        dist_threshold = float(f"0.{parts[3].split(".")[1]}")
+        print(f"{model_name}, {layer_num}, {dist_threshold}")
 
         encodings_dict = encode(args.query_dir, None, model_name, layer_num, "wav")
 
@@ -141,13 +141,13 @@ if __name__ == "__main__":
                 distance, norm_distance = compute_distance(i, j, all_norm_features)
                 new_norm_dist_mat[j, i] = norm_distance
 
-        dist_mat_dir = Path(f"output/dtw/{model_name}/{layer_num}/d{distance}")
+        dist_mat_dir = Path(f"output/dtw/{model_name}/{layer_num}/d{dist_threshold}")
         dist_mat_dir.mkdir(parents=True, exist_ok=True)
 
         np.save(dist_mat_dir / "norm_dist_mat.npy", norm_dist_mat)
         print(new_norm_dist_mat)
 
-        clusters = cluster(new_norm_dist_mat, file_names, model_name, layer_num, distance)
+        clusters = cluster(new_norm_dist_mat, file_names, model_name, layer_num, dist_threshold)
         
         appended_clusters = []
         for i, clust in enumerate(clusters):

@@ -40,8 +40,6 @@ def parse_text_to_dict(file):
 
 
 
-
-
 def parse_cluster_file(filename):
     with open(filename, "r", encoding="utf-8") as file:
         lines = file.readlines()

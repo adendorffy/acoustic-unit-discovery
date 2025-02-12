@@ -50,3 +50,10 @@ class WordUnit:
         self.index = int(index)
         self.file = file
         self.id = int(id)
+        self.start_time = None
+        self.end_time = None
+
+    def add_word_boundaries(self, start_time, end_time):
+        self.start_time = start_time
+        self.end_time = end_time
+    
