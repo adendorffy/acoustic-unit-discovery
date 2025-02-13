@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 
-def cluster(input_dir, cluster_dir, model_name, layer_num, distance_threshold=0.7):
+def cluster(input_dir, cluster_dir, model_name, layer_num):
     if isinstance(input_dir, Path):
         input_dir = Path(input_dir / model_name / str(layer_num))
         files = list(input_dir.rglob("*"))
@@ -28,7 +28,7 @@ def cluster(input_dir, cluster_dir, model_name, layer_num, distance_threshold=0.
 
     norm_dist_mat += norm_dist_mat.T
 
-    DISTANCE_THRESHOLD = distance_threshold
+    DISTANCE_THRESHOLD = np.mean(norm_dist_mat)/2 + np.std(norm_dist_mat)
     num_nodes = norm_dist_mat.shape[0]
     graph = {i: set() for i in range(num_nodes)}
 
@@ -63,7 +63,7 @@ def cluster(input_dir, cluster_dir, model_name, layer_num, distance_threshold=0.
             clusters.append(new_cluster)
 
     if isinstance(cluster_dir,Path):
-        output_file = cluster_dir / f"{model_name}_{layer_num}_d{distance_threshold}.txt"
+        output_file = cluster_dir / f"{model_name}_{layer_num}_d{DISTANCE_THRESHOLD}.txt"
         cluster_dir.mkdir(parents=True, exist_ok=True)
 
         with open(output_file, "w", encoding="utf-8") as f:
@@ -71,7 +71,7 @@ def cluster(input_dir, cluster_dir, model_name, layer_num, distance_threshold=0.
                 f.write(f"\nCluster {i}:\n")  
                 for j in range(len(cluster)):
                     f.write(f"{cluster[j]} = {filenames[str(cluster[j])]}\n")
-        return f"Cluster info written in {output_file}"
+        return f"Cluster info written in {output_file} (with dist {DISTANCE_THRESHOLD})"
     else:
         return clusters
 
@@ -105,15 +105,9 @@ if __name__ == "__main__":
         type=int,
         default=6,
     )
-    parser.add_argument(
-        "dist",
-        help="Layer number to extract from.",
-        type=float,
-        default=0.7,
-    )
     args = parser.parse_args()
 
-    message = cluster(args.input_dir, args.cluster_dir, args.model_name, args.layer_num, args.dist)
+    message = cluster(args.input_dir, args.cluster_dir, args.model_name, args.layer_num)
 
     print(message)
-    # python cluster.py output/dtw/ output/dtw/clusters/ hubert_base 8 0.5
+    # python cluster.py output/dtw/ output/dtw/clusters/ hubert_base 8 

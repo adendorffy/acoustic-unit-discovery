@@ -13,14 +13,8 @@ RESULTS_FILE="output/dtw/results.csv"
 for MODEL in "${MODEL_NAMES[@]}"; do
     for LAYER in "${LAYER_NUMBERS[@]}"; do
         echo "Running DTW on $MODEL $LAYER"
+
         python dtw.py "$ENCODINGS_DIR" "$ALIGNMENTS_DIR" "$OUTPUT_DIR" "$MODEL" "$LAYER"
-
-        for DIST in "${DISTANCE_THRESHOLDS[@]}"; do
-            echo "Clustering with $DIST"
-            python cluster.py "$OUTPUT_DIR" "$OUTPUT_DIR/clusters/" "$MODEL" "$LAYER" "$DIST"
-
-            echo "Eval with $DIST"
-            python eval.py "$EVAL_ALIGNMENTS" "$OUTPUT_DIR/clusters" "$MODEL" "$LAYER" "$DIST" "$RESULTS_FILE"
-        done
+    
     done
 done

@@ -27,17 +27,34 @@ def compute_distance(i: int, j: int, norm_features: torch.tensor)->tuple:
     N = norm_features[i].shape[0]
     M = norm_features[j].shape[0]
 
+    num_segments = 4
+    steps = np.array([1,1,1,2,2,1]).reshape((-1,2))
+    weights = np.array([2,3,3])
+
     dist_mat = torch.cdist(norm_features[i], norm_features[j], p=2)
     cos_dist_mat = (dist_mat ** 2)/2
-    # cosine_sim_matrix = torch.matmul(torch.stack(norm_features), torch.stack(norm_features).T)
-    # cos_dist_mat = 1 - cosine_sim_matrix
+
+    seg_len = int(np.ceil(cos_dist_mat.shape[0]/num_segments))
+    dn1 = steps[:,0].astype(np.uint32)
+    dm1 = steps[:,1].astype(np.uint32)
+    dw1 = weights
+    params1 = {'dn': dn1, 'dm': dm1, 'dw': dw1, 'SubSequence': True}
+
+    d_parts = []
+    b_parts = []
+    for i in range(num_segments):
+        dist_mat_part = cos_dist_mat[i*seg_len : min((i+1)*seg_len, cos_dist_mat.shape[0]), :]
+        [D, B] = segment_dp(dist_mat_part, params1)
+        d_parts.append(D)
+        b_parts.append(B)
+    
     cost_mat = dp(cos_dist_mat)
     distance = round(float(cost_mat[-1, -1])*1000/1000, 4)
     norm_distance = distance/(N+M)
 
     return distance, norm_distance
 
-def dp(dist_mat):
+def segment_dp(dist_mat):
     """
     Calculate the cost matrix for a given distance matrix.
     """
