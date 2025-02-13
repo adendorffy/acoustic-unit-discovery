@@ -29,7 +29,10 @@ def compute_distance(i: int, j: int, norm_features: torch.tensor)->tuple:
     M = norm_features[j].shape[0]
 
     dist_mat = torch.cdist(norm_features[i], norm_features[j], p=2)
-    cost_mat = dp(dist_mat)
+    cos_dist_mat = (dist_mat ** 2)/2
+    # cosine_sim_matrix = torch.matmul(torch.stack(norm_features), torch.stack(norm_features).T)
+    # cos_dist_mat = 1 - cosine_sim_matrix
+    cost_mat = dp(cos_dist_mat)
     distance = round(float(cost_mat[-1, -1])*1000/1000, 4)
     norm_distance = distance/(N+M)
 
@@ -80,7 +83,6 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
     
     for file in tqdm(files, desc="Loading Features"):
         alignment_file = [a for a in list(alignment_dir.rglob("*.list")) if a.stem == file.stem]
-
         if not alignment_file:
             continue
         else:
@@ -154,14 +156,14 @@ if __name__ == "__main__":
         type=Path,
     )
     parser.add_argument(
-        "--model_name",
+        "model_name",
         help="Name of the HuBERT model to use.",
         default="all",
         choices=["hubert_base", "hubert_large", "hubert_xlarge", "wavlm_base", "wavlm_large", "wavlm_xlarge"], 
     )
 
     parser.add_argument(
-        "--layer_num",
+        "layer_num",
         help="Layer number to extract from.",
         type=int,
         default=6,
@@ -171,4 +173,4 @@ if __name__ == "__main__":
 
     dtw(args.encoding_dir, args.align_dir, args.output_dir ,args.model_name, args.layer_num)
 
-    
+#  python dtw.py encodings/librispeech_subset/ data/all_alignments/ output/dtw/ wavlm_base 8

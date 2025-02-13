@@ -2,6 +2,8 @@
 import argparse
 from pathlib import Path
 from utils import Cluster
+import csv
+import os
 
 def parse_text_to_dict(file):
     with open(file, "r", encoding="utf-8") as f:
@@ -100,60 +102,71 @@ if __name__ == "__main__":
     parser.add_argument(
         "layer_num",
         help="Layer number to extract from.",
-        type=int,
-        default=6,
+        type=int,        
     )
     parser.add_argument(
         "dist",
-        help="Distance threshold",
-        type=float,
-        default=-1,
+        help="Distance Threshold",
+        type=float,        
+    )
+    parser.add_argument(
+        "results_file",
+        help="File with results (.csv)",
+        type=Path,        
     )
     args = parser.parse_args()
 
     indices_dict = parse_text_to_dict(args.text_indices)
-    if args.dist == -1: 
-        cluster_files = list(Path(f"{args.cluster_dir}/{args.model_name}_{args.layer_num}_d").rglob("*.txt"))
-    else:
-        cluster_files = [f"{args.cluster_dir}/{args.model_name}_{args.layer_num}_d{args.dist}.txt"]
+    cluster_file = f"{args.cluster_dir}/{args.model_name}_{args.layer_num}_d{args.dist}.txt"
 
-    for cluster_file in cluster_files:
-        clusters = parse_cluster_file(cluster_file)
+    args.results_file.parent.mkdir(parents=True, exist_ok=True)
+
+    clusters = parse_cluster_file(cluster_file)
+    
+    total_length = 0
+    total_purity = 0
+    clusters_array = []
+
+    for clust in clusters:
         
-        total_length = 0
-        total_purity = 0
-        clusters_array = []
+        for word_unit in clust.word_dict:
+            word = indices_dict[word_unit.file][word_unit.index]
+            clust.add_true_word(word)
 
-        for clust in clusters:
-            
-            for word_unit in clust.word_dict:
-                word = indices_dict[word_unit.file][word_unit.index]
-                clust.add_true_word(word)
+        if len(clust.word_dict) > 1:
+            clust.cluster_purity()
 
-            if len(clust.word_dict) > 1:
-                clusters_array.append(clust.true_word_dict)
-                clust.cluster_purity()
+            print(f"cluster {clust.id} has purity : {clust.purity*100}%")
+            print(clust.true_word_dict)
 
-                print(f"cluster {clust.id} has purity : {clust.purity*100}%")
-                print(clust.true_word_dict)
+            total_length += clust.length
+            total_purity += clust.purity * clust.length
 
-                total_length += clust.length
-                total_purity += clust.purity * clust.length
-            
-        total_purity = total_purity / total_length if total_length > 0 else 0 
-        print(f"Average total purity: {total_purity*100}%")
+        clusters_array.append(clust.true_word_dict)
         
-    condensed_clusters = []
-    for c in range(len(clusters_array)):
-        condensed_words = []
-        for w in range(0, len(clusters_array[c])):
-            if clusters_array[c][w] not in condensed_words:
-                condensed_words.append(clusters_array[c][w])
-        condensed_clusters.append(condensed_words)
-    print(condensed_clusters)
+    total_purity = total_purity / total_length if total_length > 0 else 0 
 
+    file_exists = os.path.exists(args.results_file)
 
-    print("Number of duplicate clusters:", Cluster.duplicate_clusters(condensed_clusters))  
+    with open(args.results_file, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
         
+        if not file_exists:
+            writer.writerow(["Model Name", "Layer Number", "Distance Threshold", "Average Total Purity", "Clusters", "Duplicate Clusters"])
+        condensed_clusters = []
+        for c in clusters_array:
+            condensed_clusters.append(list(set(c)))
+
+        num_duplicate_clusters = Cluster.duplicate_clusters(condensed_clusters)
+
+        writer.writerow([
+            args.model_name,
+            args.layer_num,
+            args.dist,
+            f"{total_purity * 100:.2f}%",  
+            condensed_clusters, 
+            num_duplicate_clusters
+        ])
+        print(condensed_clusters)
 
 # python eval.py data/librispeech_subset_alignments/words_and_indices.txt output/dtw/clusters wavlm_base 8 0.55
