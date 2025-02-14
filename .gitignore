@@ -5,3 +5,5 @@ output/
 dynamic_time_warping/data
 dynamic_time_warping/.venv
 dynamic_time_warping/encodings
+**/build/
+dynamic_time_warping/cython_dtw/_dtw.cpython-312-x86_64-linux-gnu.so

@@ -7,9 +7,11 @@ from pathlib import Path
 from tqdm import tqdm
 import torch
 import json
+from cython_dtw import _dtw
+from sklearn.preprocessing import StandardScaler
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+dtw_cost_func = _dtw.multivariate_dtw_cost_cosine
 
 def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     """
@@ -20,51 +22,27 @@ def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     return int((timestamp * sample_rate) / hop_size)
 
 
-def compute_distance(i: int, j: int, norm_features: torch.tensor)->tuple:
+
+def dtw_sweep_min(query_seq, search_seq, n_step=3):
     """
-    Compute DTW distance for a given pair of features.
+    Return the minimum DTW cost as `query_seq` is swept across `search_seq`.
+
+    Step size can be specified with `n_step`.
     """
-    N = norm_features[i].shape[0]
-    M = norm_features[j].shape[0]
+    i_start = 0
+    n_query = query_seq.shape[0]
+    n_search = search_seq.shape[0]
+    min_cost = np.inf
 
-    dist_mat = torch.cdist(norm_features[i], norm_features[j], p=2)
-    cos_dist_mat = (dist_mat ** 2)/2
-    # cosine_sim_matrix = torch.matmul(torch.stack(norm_features), torch.stack(norm_features).T)
-    # cos_dist_mat = 1 - cosine_sim_matrix
-    cost_mat = dp(cos_dist_mat)
-    distance = round(float(cost_mat[-1, -1])*1000/1000, 4)
-    norm_distance = distance/(N+M)
+    while i_start <= n_search - n_query or i_start == 0:
+        cost = dtw_cost_func(
+            query_seq, search_seq[i_start:i_start + n_query], True
+        )
+        i_start += n_step
+        if cost < min_cost:
+            min_cost = cost
 
-    return distance, norm_distance
-
-def dp(dist_mat):
-    """
-    Calculate the cost matrix for a given distance matrix.
-    """
-
-    N, M = dist_mat.shape
-
-    cost_mat = torch.zeros((N + 1, M + 1), device=device)
-    for i in range(1, N + 1):
-        cost_mat[i, 0] = np.inf
-    for i in range(1, M + 1):
-        cost_mat[0, i] = np.inf
-    
-    traceback_mat = torch.zeros((N, M), device=device)
-    for i in range(N):
-        for j in range(M):
-            penalty = torch.tensor([
-                cost_mat[i, j],      # match (0)
-                cost_mat[i, j + 1],  # insertion (1)
-                cost_mat[i + 1, j]]  # deletion (2)
-            ).to(device) 
-            i_penalty = torch.argmin(penalty)
-            cost_mat[i + 1, j + 1] = dist_mat[i, j] + penalty[i_penalty]
-            traceback_mat[i, j] = i_penalty
-    
-    cost_mat = cost_mat[1:, 1:]
-    return cost_mat
-
+    return min_cost
 
 def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int)->None:
     """
@@ -90,7 +68,7 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
         with open(str(alignment_file), "r") as f:
             boundaries = [get_frame_num(float(line.strip()), 16000, 20) for line in f]
         
-        encodings = torch.from_numpy(np.load(file)).to(device)
+        encodings = np.load(file)
 
         if len(encodings.shape) == 1:
             encodings = encodings.unsqueeze(0)
@@ -101,19 +79,24 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
             filenames[index] = f"{file.stem}_{i}"
             index += 1
     
+    tensor_features = [torch.from_numpy(f) for f in features]
+    stacked_features = torch.cat(tensor_features, dim=0)
     normalized_features = []
-    for feature in tqdm(features, desc="Normalising Features"):
-        norm_feature = torch.nn.functional.normalize(feature, p=2, dim=1)
-        normalized_features.append(norm_feature) 
+
+    scaler = StandardScaler()
+    scaler.fit(stacked_features) # (n_samples, n_features)
+    normalized_features = []
+    for feature in tqdm(features, desc="Normalizing Features"):
+        normalized_features.append(torch.from_numpy(scaler.transform(feature))) # (n_samples, n_features)
     
     num_features = len(normalized_features)
     norm_distance_mat = np.zeros((num_features, num_features))
-    distance_mat = np.zeros((num_features, num_features))
+
+    normalized_features = [f.cpu().numpy().astype(np.float64) for f in normalized_features]
 
     for i in tqdm(range(num_features), "Calculating Distances"):
         for j in range(i+1, num_features):
-            distance, norm_distance = compute_distance(i, j, normalized_features)
-            distance_mat[i, j] = distance
+            norm_distance = dtw_sweep_min(normalized_features[i], normalized_features[j])
             norm_distance_mat[i, j] = norm_distance
     
     print(norm_distance_mat)
@@ -121,12 +104,10 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
     output_path.mkdir(parents=True, exist_ok=True)
 
     norm_dist_file = output_path / "norm_distance_matrix.npy"
-    dist_file = output_path / "distance_matrix.npy"
     filenames_file = output_path / "filenames.txt"
     print(f"saving to {output_path}")
 
     np.save(norm_dist_file, norm_distance_mat)
-    np.save(dist_file, distance_mat)
 
     with open(filenames_file, "w") as file:
         json.dump(filenames, file, indent=4)
@@ -134,7 +115,6 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
 
 if __name__ == "__main__":
 
-    print(f"Using device {device}")
     parser = argparse.ArgumentParser(description="Apply DTW to HuBERT features to get a distance matrix.")
     parser.add_argument(
         "encoding_dir",

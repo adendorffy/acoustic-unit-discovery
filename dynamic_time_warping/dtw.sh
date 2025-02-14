@@ -6,7 +6,7 @@ DISTANCE_THRESHOLDS=(0.5 0.55 0.6)
 
 ENCODINGS_DIR="encodings/librispeech_subset/"
 ALIGNMENTS_DIR="data/all_alignments/"
-OUTPUT_DIR="output/dtw/"
+OUTPUT_DIR="output/cython_dtw/"
 EVAL_ALIGNMENTS="data/librispeech_subset_alignments/words_and_indices.txt"
 RESULTS_FILE="output/dtw/results.csv"
 
