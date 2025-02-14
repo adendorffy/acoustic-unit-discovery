@@ -4,10 +4,10 @@ MODEL_NAMES=("wavlm_base" "wavlm_large" "wavlm_xlarge" "hubert_base" "hubert_lar
 LAYER_NUMBERS=(6 7 8 9)
 DISTANCE_THRESHOLDS=(0.5 0.55 0.6)
 
-ENCODINGS_DIR="encodings/librispeech_subset/"
+ENCODINGS_DIR="encodings/librispeech-wav/"
 ALIGNMENTS_DIR="data/all_alignments/"
-OUTPUT_DIR="output/cython_dtw/"
-EVAL_ALIGNMENTS="data/librispeech_subset_alignments/words_and_indices.txt"
+OUTPUT_DIR="full_output/cython_dtw/"
+EVAL_ALIGNMENTS="data/words_and_indices.txt"
 RESULTS_FILE="output/dtw/results.csv"
 
 for MODEL in "${MODEL_NAMES[@]}"; do

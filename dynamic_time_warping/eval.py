@@ -110,22 +110,28 @@ if __name__ == "__main__":
         help="File with results (.csv)",
         type=Path,        
     )
+    parser.add_argument(
+        "--write_header",
+        help="Should header be written to results file.",
+        default=False, 
+        action='store_true',         
+    )
     args = parser.parse_args()
 
     indices_dict = parse_text_to_dict(args.text_indices)
     
     cluster_dir = Path(f"{args.cluster_dir}/")
-    cluster_files = list(cluster_dir.rglob(f"{args.model_name}_{args.layer_num}*.txt"))
+    cluster_files = list(cluster_dir.rglob(f"{args.model_name}_{args.layer_num}_d*.txt"))
     if len(cluster_files) == 0:
         raise ReferenceError("Cluster Directory empty")
 
     args.results_file.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = os.path.exists(args.results_file)
 
     with open(args.results_file, "a", encoding="utf-8", newline="") as f:
         
         writer = csv.writer(f)
-        # writer.writerow(["Model Name", "Layer Number", "Distance Threshold", "Average Total Purity", "Clusters", "Duplicate Clusters"])
+        if args.write_header:
+                writer.writerow(["Model Name", "Layer Number", "Distance Threshold", "Average Total Purity", "Duplicate Clusters", "Total Clusters"])
 
         for cluster_file in cluster_files:
             cluster_file_stem = cluster_file.stem
@@ -147,39 +153,34 @@ if __name__ == "__main__":
                     word = indices_dict[word_unit.file][word_unit.index]
                     clust.add_true_word(word)
 
-                if len(clust.word_dict) > 1:
+                if len(clust.word_dict) > 0:
                     clust.cluster_purity()
-
-                    print(f"cluster {clust.id} has purity : {clust.purity*100}%")
-                    print(clust.true_word_dict)
 
                     total_length += clust.length
                     total_purity += clust.purity * clust.length
 
+                print(clust.true_word_dict)
                 clusters_array.append(clust.true_word_dict)
                 
-            total_purity = total_purity / total_length if total_length > 0 else 0 
-
-            print(f"File exists: {file_exists}")
+            total_purity = total_purity / total_length if total_length > 0 else 1.0 
+            num_clusters = len(clusters)
+            print(f"total purity: {total_purity}")
             
-            if not file_exists:
-                writer.writerow(["Model Name", "Layer Number", "Distance Threshold", "Average Total Purity", "Clusters", "Duplicate Clusters"])
-            
-
             condensed_clusters = []
             for c in clusters_array:
                 condensed_clusters.append(list(set(c)))
 
             num_duplicate_clusters = Cluster.duplicate_clusters(condensed_clusters)
+            print(f"Duplicate clusters: {num_duplicate_clusters}\n")
 
-            writer.writerow([
-                args.model_name,
-                args.layer_num,
-                dist,
-                f"{total_purity * 100:.2f}%",  
-                condensed_clusters, 
-                num_duplicate_clusters
-            ])
-            print(condensed_clusters)
+            # writer.writerow([
+            #     args.model_name,
+            #     args.layer_num,
+            #     dist,
+            #     f"{total_purity * 100:.2f}%",  
+            #     num_duplicate_clusters,
+            #     num_clusters
+            # ])
+            # print(condensed_clusters)
 
 # python eval.py data/librispeech_subset_alignments/words_and_indices.txt output/dtw/clusters wavlm_base 8 

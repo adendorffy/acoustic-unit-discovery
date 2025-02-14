@@ -9,9 +9,14 @@ import torch
 import json
 from cython_dtw import _dtw
 from sklearn.preprocessing import StandardScaler
-
+from concurrent.futures import ProcessPoolExecutor
 
 dtw_cost_func = _dtw.multivariate_dtw_cost_cosine
+
+def batch_data(data, batch_size):
+    for i in range(0, len(data), batch_size):
+        yield data[i:i + batch_size]
+
 
 def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     """
@@ -21,6 +26,10 @@ def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     hop_size = np.max([hop_size, 1])
     return int((timestamp * sample_rate) / hop_size)
 
+def calculate_distance(i_j, normalized_features):
+    i, j = i_j
+    norm_distance = dtw_sweep_min(normalized_features[i], normalized_features[j])
+    return i, j, norm_distance
 
 
 def dtw_sweep_min(query_seq, search_seq, n_step=3):
@@ -44,7 +53,7 @@ def dtw_sweep_min(query_seq, search_seq, n_step=3):
 
     return min_cost
 
-def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int)->None:
+def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int, batch_size:int)->None:
     """
     Use Dynmic Time Warping to calculate the distances between different words.
     """
@@ -75,6 +84,8 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
    
         for i in range(0,len(boundaries)-1):
             new_feature = encodings[boundaries[i]:boundaries[i+1], :]
+            if len(new_feature) == 0:
+                continue
             features.append(new_feature)
             filenames[index] = f"{file.stem}_{i}"
             index += 1
@@ -91,13 +102,27 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
     
     num_features = len(normalized_features)
     norm_distance_mat = np.zeros((num_features, num_features))
-
     normalized_features = [f.cpu().numpy().astype(np.float64) for f in normalized_features]
 
-    for i in tqdm(range(num_features), "Calculating Distances"):
-        for j in range(i+1, num_features):
-            norm_distance = dtw_sweep_min(normalized_features[i], normalized_features[j])
-            norm_distance_mat[i, j] = norm_distance
+    pairs_to_process = [(i, j) for i in range(num_features) for j in range(i + 1, num_features)]
+
+    batch_pairs = list(batch_data(pairs_to_process, batch_size))
+
+    with ProcessPoolExecutor(max_workers=8) as executor:
+        for batch in tqdm(batch_pairs, desc="Processing Batches"):
+            results = list(
+                tqdm(
+                    executor.map(
+                        lambda pair: calculate_distance(pair[0], pair[1], normalized_features),
+                        batch
+                    ),
+                    total=len(batch),
+                    desc="Calculating Distances",
+                )
+            )
+    for i, j, norm_distance in results:
+        norm_distance_mat[i, j] = norm_distance
+        norm_distance_mat[j, i] = norm_distance  
     
     print(norm_distance_mat)
     output_path = Path(output_dir / model_name / str(layer_num))
@@ -150,6 +175,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    dtw(args.encoding_dir, args.align_dir, args.output_dir ,args.model_name, args.layer_num)
+    dtw(args.encoding_dir, args.align_dir, args.output_dir ,args.model_name, args.layer_num, batch_size=100)
 
 #  python dtw.py encodings/librispeech_subset/ data/all_alignments/ output/dtw/ wavlm_base 8

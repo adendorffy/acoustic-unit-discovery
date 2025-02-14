@@ -28,7 +28,7 @@ def cluster(input_dir, cluster_dir, model_name, layer_num):
 
     norm_dist_mat += norm_dist_mat.T
 
-    DISTANCE_THRESHOLD = np.mean(norm_dist_mat)/2 + np.std(norm_dist_mat)
+    DISTANCE_THRESHOLD = round(np.mean(norm_dist_mat)/3,3)
     num_nodes = norm_dist_mat.shape[0]
     graph = {i: set() for i in range(num_nodes)}
 
@@ -71,7 +71,7 @@ def cluster(input_dir, cluster_dir, model_name, layer_num):
                 f.write(f"\nCluster {i}:\n")  
                 for j in range(len(cluster)):
                     f.write(f"{cluster[j]} = {filenames[str(cluster[j])]}\n")
-        return f"Cluster info written in {output_file} (with dist {DISTANCE_THRESHOLD})"
+        return f"Cluster info written in {output_file} (with dist {DISTANCE_THRESHOLD})\n"
     else:
         return clusters
 
