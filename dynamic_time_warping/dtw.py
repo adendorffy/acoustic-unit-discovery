@@ -7,15 +7,20 @@ from pathlib import Path
 from tqdm import tqdm
 import torch
 import json
+import itertools
+import os
 from cython_dtw import _dtw
 from sklearn.preprocessing import StandardScaler
 from concurrent.futures import ProcessPoolExecutor
 
 dtw_cost_func = _dtw.multivariate_dtw_cost_cosine
 
-def batch_data(data, batch_size):
-    for i in range(0, len(data), batch_size):
-        yield data[i:i + batch_size]
+def generate_pairs_in_batches(num_features, batch_size=100):
+    for i in range(num_features):
+        for j in range(i + 1, num_features):
+            yield (i, j)  
+            if (j - i) % batch_size == 0:
+                yield None  
 
 
 def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
@@ -26,8 +31,8 @@ def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     hop_size = np.max([hop_size, 1])
     return int((timestamp * sample_rate) / hop_size)
 
-def calculate_distance(i_j, normalized_features):
-    i, j = i_j
+def process_pair(pair, normalized_features):
+    i, j = pair
     norm_distance = dtw_sweep_min(normalized_features[i], normalized_features[j])
     return i, j, norm_distance
 
@@ -95,47 +100,48 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
     normalized_features = []
 
     scaler = StandardScaler()
-    scaler.fit(stacked_features) # (n_samples, n_features)
+    scaler.fit(stacked_features) 
     normalized_features = []
     for feature in tqdm(features, desc="Normalizing Features"):
-        normalized_features.append(torch.from_numpy(scaler.transform(feature))) # (n_samples, n_features)
+        normalized_features.append(torch.from_numpy(scaler.transform(feature))) 
     
     num_features = len(normalized_features)
     norm_distance_mat = np.zeros((num_features, num_features))
     normalized_features = [f.cpu().numpy().astype(np.float64) for f in normalized_features]
 
-    pairs_to_process = [(i, j) for i in range(num_features) for j in range(i + 1, num_features)]
+    print(len(normalized_features))
+    num_pairs = (num_features * (num_features - 1)) // 2
+    current_batch = []
+    for pair in tqdm(generate_pairs_in_batches(num_features, 1000), total=num_pairs, desc="Calculating Distances"):
+        if pair is None:    
+            for i, j in current_batch:  
+                i, j, norm_distance = process_pair((i, j), normalized_features)
+                norm_distance_mat[i, j] = norm_distance
+                norm_distance_mat[j, i] = norm_distance  
+            
+            current_batch = []  
+        else:
+            current_batch.append(pair)
 
-    batch_pairs = list(batch_data(pairs_to_process, batch_size))
+    if current_batch:
+        for i, j in current_batch:
+            norm_distance = process_pair((i, j), normalized_features)
+            norm_distance_mat[i, j] = norm_distance
+            norm_distance_mat[j, i] = norm_distance  
 
-    with ProcessPoolExecutor(max_workers=8) as executor:
-        for batch in tqdm(batch_pairs, desc="Processing Batches"):
-            results = list(
-                tqdm(
-                    executor.map(
-                        lambda pair: calculate_distance(pair[0], pair[1], normalized_features),
-                        batch
-                    ),
-                    total=len(batch),
-                    desc="Calculating Distances",
-                )
-            )
-    for i, j, norm_distance in results:
-        norm_distance_mat[i, j] = norm_distance
-        norm_distance_mat[j, i] = norm_distance  
-    
     print(norm_distance_mat)
-    output_path = Path(output_dir / model_name / str(layer_num))
-    output_path.mkdir(parents=True, exist_ok=True)
+    print(norm_distance_mat.shape)
+    # output_path = Path(output_dir / model_name / str(layer_num))
+    # output_path.mkdir(parents=True, exist_ok=True)
 
-    norm_dist_file = output_path / "norm_distance_matrix.npy"
-    filenames_file = output_path / "filenames.txt"
-    print(f"saving to {output_path}")
+    # norm_dist_file = output_path / "norm_distance_matrix.npy"
+    # filenames_file = output_path / "filenames.txt"
+    # print(f"saving to {output_path}")
 
-    np.save(norm_dist_file, norm_distance_mat)
+    # np.save(norm_dist_file, norm_distance_mat)
 
-    with open(filenames_file, "w") as file:
-        json.dump(filenames, file, indent=4)
+    # with open(filenames_file, "w") as file:
+    #     json.dump(filenames, file, indent=4)
     
 
 if __name__ == "__main__":
@@ -178,3 +184,4 @@ if __name__ == "__main__":
     dtw(args.encoding_dir, args.align_dir, args.output_dir ,args.model_name, args.layer_num, batch_size=100)
 
 #  python dtw.py encodings/librispeech_subset/ data/all_alignments/ output/dtw/ wavlm_base 8
+#  python dtw.py encodings/librispeech-wav/ data/all_alignments/ full_output/cython_dtw/ wavlm_base 8
