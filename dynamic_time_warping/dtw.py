@@ -7,11 +7,8 @@ from pathlib import Path
 from tqdm import tqdm
 import torch
 import json
-import itertools
-import os
 from cython_dtw import _dtw
 from sklearn.preprocessing import StandardScaler
-from concurrent.futures import ProcessPoolExecutor
 
 dtw_cost_func = _dtw.multivariate_dtw_cost_cosine
 

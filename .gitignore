@@ -1,9 +1,10 @@
 .env/
-data/
+**/data/
 __pycache__
 output/
-dynamic_time_warping/data
 dynamic_time_warping/.venv
-dynamic_time_warping/encodings
+**/encodings
 **/build/
+**/features/
+**/codes/
 dynamic_time_warping/cython_dtw/_dtw.cpython-312-x86_64-linux-gnu.so
