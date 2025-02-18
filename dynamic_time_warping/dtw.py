@@ -9,16 +9,9 @@ import torch
 import json
 from cython_dtw import _dtw
 from sklearn.preprocessing import StandardScaler
+from joblib import Parallel, delayed
 
 dtw_cost_func = _dtw.multivariate_dtw_cost_cosine
-
-def generate_pairs_in_batches(num_features, batch_size=100):
-    for i in range(num_features):
-        for j in range(i + 1, num_features):
-            yield (i, j)  
-            if (j - i) % batch_size == 0:
-                yield None  
-
 
 def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     """
@@ -28,10 +21,6 @@ def get_frame_num(timestamp: float, sample_rate: int, frame_size_ms: int)->int:
     hop_size = np.max([hop_size, 1])
     return int((timestamp * sample_rate) / hop_size)
 
-def process_pair(pair, normalized_features):
-    i, j = pair
-    norm_distance = dtw_sweep_min(normalized_features[i], normalized_features[j])
-    return i, j, norm_distance
 
 
 def dtw_sweep_min(query_seq, search_seq, n_step=3):
@@ -40,6 +29,10 @@ def dtw_sweep_min(query_seq, search_seq, n_step=3):
 
     Step size can be specified with `n_step`.
     """
+
+    from cython_dtw import _dtw
+    dtw_cost_func = _dtw.multivariate_dtw_cost_cosine
+
     i_start = 0
     n_query = query_seq.shape[0]
     n_search = search_seq.shape[0]
@@ -107,24 +100,18 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
     normalized_features = [f.cpu().numpy().astype(np.float64) for f in normalized_features]
 
     print(len(normalized_features))
-    num_pairs = (num_features * (num_features - 1)) // 2
-    current_batch = []
-    for pair in tqdm(generate_pairs_in_batches(num_features, 1000), total=num_pairs, desc="Calculating Distances"):
-        if pair is None:    
-            for i, j in current_batch:  
-                i, j, norm_distance = process_pair((i, j), normalized_features)
-                norm_distance_mat[i, j] = norm_distance
-                norm_distance_mat[j, i] = norm_distance  
-            
-            current_batch = []  
-        else:
-            current_batch.append(pair)
 
-    if current_batch:
-        for i, j in current_batch:
-            norm_distance = process_pair((i, j), normalized_features)
-            norm_distance_mat[i, j] = norm_distance
-            norm_distance_mat[j, i] = norm_distance  
+    for i in tqdm(range(num_features), desc="Calculating Distances"):
+        dists_i = Parallel(n_jobs=2)(
+            delayed(dtw_sweep_min)(normalized_features[i], normalized_features[j])
+            for j in range(i + 1, num_features)
+        )
+
+        # Zip results correctly
+        for j, dist in zip(range(i + 1, num_features), dists_i):
+            norm_distance_mat[i, j] = dist
+            norm_distance_mat[j, i] = dist  # Symmetric matrix
+        
 
     print(norm_distance_mat)
     print(norm_distance_mat.shape)
