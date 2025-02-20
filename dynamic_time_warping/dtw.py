@@ -49,24 +49,13 @@ def dtw_sweep_min(query_seq, search_seq, n_step=3):
 
     return min_cost
 
-def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int, sample_size:int)->None:
-    """
-    Use Dynmic Time Warping to calculate the distances between different words.
-    """
-    file_dir = encoding_dir / model_name / str(layer_num)
-    files = list(file_dir.rglob("*.npy"))
-
-    sampled_files = random.sample(files, sample_size)  
-
-    if output_dir:
-        output_dir.mkdir(parents=True, exist_ok=True)
-
+def dtw_p(sampled_files, alignment_files):
     features = []
     filenames = {}
     index = 0
-    
     for file in tqdm(sampled_files, desc="Loading Features"):
-        alignment_file = [a for a in list(alignment_dir.rglob("*.list")) if a.stem == file.stem]
+        alignment_file = [a for a in alignment_files if a.stem == file.stem]
+
         if not alignment_file:
             continue
         else:
@@ -88,25 +77,15 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
             filenames[index] = f"{file.stem}_{i}"
             index += 1
     
-    tensor_features = [torch.from_numpy(f) for f in features]
-    stacked_features = torch.cat(tensor_features, dim=0)
-    normalized_features = []
+    tensor_features = [torch.from_numpy(f) for f in features]    
 
-    scaler = StandardScaler()
-    scaler.fit(stacked_features) 
-    normalized_features = []
-    for feature in tqdm(features, desc="Normalizing Features"):
-        normalized_features.append(torch.from_numpy(scaler.transform(feature))) 
-    
-    num_features = len(normalized_features)
+    num_features = len(tensor_features)
     norm_distance_mat = np.zeros((num_features, num_features))
-    normalized_features = [f.cpu().numpy().astype(np.float64) for f in normalized_features]
 
-    print(len(normalized_features))
 
     for i in tqdm(range(num_features), desc="Calculating Distances"):
         dists_i = Parallel(n_jobs=8)(
-            delayed(dtw_sweep_min)(normalized_features[i], normalized_features[j])
+            delayed(dtw_sweep_min)(tensor_features[i], tensor_features[j])
             for j in range(i + 1, num_features)
         )
 
@@ -114,7 +93,28 @@ def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer
         for j, dist in zip(range(i + 1, num_features), dists_i):
             norm_distance_mat[i, j] = dist
             norm_distance_mat[j, i] = dist  # Symmetric matrix
-        
+
+        return norm_distance_mat, filenames
+
+def dtw(encoding_dir, alignment_dir:Path, output_dir:Path, model_name:str, layer_num:int, sample_size:int)->None:
+    """
+    Use Dynmic Time Warping to calculate the distances between different words.
+    """
+    file_dir = encoding_dir / model_name / str(layer_num)
+    files = list(file_dir.rglob("*.npy"))
+
+    if sample_size == -1:
+        sampled_files = files
+    else:
+        sampled_files = random.sample(files, sample_size)  
+
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    alignment_files = list(alignment_dir.rglob("*.list"))
+
+    norm_distance_mat, filenames = dtw_p(sampled_files, alignment_files)
+    
 
     print(norm_distance_mat)
     print(norm_distance_mat.shape)
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    dtw(args.encoding_dir, args.align_dir, args.output_dir ,args.model_name, args.layer_num, sample_size=100)
+    dtw(args.encoding_dir, args.align_dir, args.output_dir ,args.model_name, args.layer_num, sample_size=-1)
 
 #  python dtw.py encodings/librispeech_subset/ data/all_alignments/ output/dtw/ wavlm_base 8
 #  python dtw.py encodings/librispeech-wav/ data/all_alignments/ full_output/cython_dtw/ wavlm_base 8
